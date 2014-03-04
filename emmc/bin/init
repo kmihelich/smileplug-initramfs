@@ -1,0 +1,57 @@
+#!/bin/busybox sh
+
+echo ""
+echo ""
+echo "--------------------------------------------------------------------"
+echo " :: Running SMILE Plug eMMC Firmware Update"
+
+# install busybox links
+/bin/busybox --install -s /bin
+
+# mount filesystems
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev
+
+# blink eyes/smile
+echo timer | tee /sys/class/leds/smileplug\:green\:eyes/trigger > /sys/class/leds/smileplug\:green\:smile/trigger && \
+ echo 100 | tee /sys/class/leds/smileplug\:green\:eyes/delay_on /sys/class/leds/smileplug\:green\:eyes/delay_off \
+ /sys/class/leds/smileplug\:green\:smile/delay_on > /sys/class/leds/smileplug\:green\:smile/delay_off
+
+echo ""
+echo " :: Waiting for devices.."
+sleep 5
+
+# check micro SD for update files
+if [ -b /dev/sda1 ]; then
+  mount /dev/sda1 /mnt/usb
+  if [ -f /mnt/usb/rootfs-emmc.tgz ]; then
+    echo " :: Found update files on SD"
+    echo " :: Formatting eMMC.."
+    mkfs.vfat /dev/mmcblk0p1
+    mkfs.ext4 /dev/mmcblk0p2
+    
+    echo " :: Extracting root filesystem.."
+    mount /dev/mmcblk0p1 /mnt/boot
+    mount /dev/mmcblk0p2 /mnt/root
+    tar -xf /mnt/usb/rootfs-emmc.tgz -C /mnt/root
+    mv /mnt/root/boot/* /mnt/boot
+    
+    echo " :: Synchronizing changes.."
+    umount /mnt/boot /mnt/root
+    
+    mv /mnt/usb/uinit-emmc /mnt/usb/uinit-emmc.pass
+  else
+    echo " :: No update files found on SD"
+    mv /mnt/usb/uinit-emmc /mnt/usb/uinit-emmc.fail
+  fi
+fi
+
+# finish up
+umount /mnt/usb/
+echo " :: Finished SMILE Plug Firmware Update"
+echo "--------------------------------------------------------------------"
+echo ""
+echo ""
+
+reboot -f
